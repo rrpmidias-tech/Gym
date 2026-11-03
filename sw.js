@@ -1,5 +1,5 @@
 // Service worker: cache offline + clique em notificação abre o app
-const CACHE = 'shape25-v3';
+const CACHE = 'shape25-v4';
 const ASSETS = ['./', './index.html', './css/styles.css', './js/app.js', './js/data.js', './js/calc.js', './js/store.js', './js/notify.js', './js/exercises.js', './js/photos.js', './js/cardio.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

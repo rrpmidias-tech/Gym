@@ -377,3 +377,5 @@ select.inp { appearance: none; }
 .cform .inp { text-align: left; }
 .cform .btn { margin: 0; }
 .rest.hot { background: var(--fat); box-shadow: 0 16px 40px -10px rgb(255 122 144 / .6); }
+.install { border-color: rgb(90 184 255 / .4); background: linear-gradient(160deg, rgb(90 184 255 / .1), transparent 60%), var(--surface); }
+.kbd { display: inline-block; padding: 0 6px; border-radius: 6px; background: var(--surface2); border: 1px solid var(--line); }

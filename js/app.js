@@ -107,6 +107,8 @@ const views = {
       ${ring(1 - left / total, 84, 8, `<b>${Math.max(0, left)}</b><small>dias</small>`)}
     </header>
 
+    ${installBanner()}
+
     <section class="stats3">
       <div class="stat"><small>Peso (média 7d)</small><b>${fmt(cur, 1)}<i>kg</i></b><em>meta ${fmt(p.goalWeight, 1)}</em></div>
       <div class="stat"><small>Sequência dieta</small><b>${streak}<i>${streak === 1 ? 'dia' : 'dias'}</i></b><em>${streak >= 3 ? 'não quebra!' : '100% = conta'}</em></div>
@@ -437,6 +439,19 @@ const views = {
 };
 
 // ------------------------------------------------------------ componentes
+// iPhone: dados e notificações só ficam completos no app instalado na Tela de Início
+function installBanner() {
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+  let hidden = false;
+  try { hidden = localStorage.getItem('shape25:hideInstall') === '1'; } catch { /* sem storage */ }
+  if (!ios || standalone || hidden) return '';
+  return `<section class="card install">
+    <div class="card-h"><h2>📲 Instale no iPhone</h2><button class="link" data-act="hideInstall">ok</button></div>
+    <p class="sm">Toque em <b>Compartilhar</b> <span class="kbd">⬆︎</span> → <b>Adicionar à Tela de Início</b>. Depois abra <b>sempre pelo ícone</b>: é lá que ficam seus dados e os alertas.</p>
+  </section>`;
+}
+
 function weekendCard(dow, always = false) {
   const title = dow === 5 ? 'Sexta: prepare o fim de semana' : always ? 'Protocolo fim de semana blindado' : 'Fim de semana blindado';
   return `<section class="card weekend">
@@ -768,6 +783,7 @@ document.addEventListener('click', async (ev) => {
       closeSheet();
       break;
     case 'closeSheet': return closeSheet();
+    case 'hideInstall': try { localStorage.setItem('shape25:hideInstall', '1'); } catch { /* */ } break;
     case 'exSwap': return openExSwap(b.dataset.wk, Number(b.dataset.i));
     case 'exCustom':
     case 'doExSwap': {
