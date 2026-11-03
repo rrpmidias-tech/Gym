@@ -5,6 +5,7 @@ import { WORKOUTS, SPLITS, DEFAULT_DAYS, WEEKDAYS, WEEKDAYS_FULL, WEEKEND_RULES,
 import { usesWeekendMenu, nutrition, mealPlan, isTrainDay, workoutFor, formatItem, equivalent, macrosOf, weeklyCheck, avgWeight, iso, daysUntil, ACTIVITY, DEFICITS } from './calc.js';
 import { get, update, save, dayLog, lastSets, dietStreak, exportJSON, importJSON, reset } from './store.js';
 import { exName, isSwapped } from './exercises.js';
+import { CARDIO_TYPES, weekCardio, cardioToday, kcalOf, weekSummary, heartZones, hiitPhases } from './cardio.js';
 import { addPhoto, listPhotos, getPhoto, deletePhoto } from './photos.js';
 import { startTicker, onToast, requestPermission, testNotification, buildICS, scheduleFor, nextEvent } from './notify.js';
 
@@ -136,9 +137,10 @@ const views = {
       <div class="card-h"><h2>${icon('dumbbell')} Treino</h2>${w ? `<span class="pill">${p.trainTime}</span>` : ''}</div>
       ${w ? `<h3>${w.nome}</h3><p class="muted">${w.foco} · ${w.ex.length} exercícios · ~${Math.round(w.ex.reduce((a, e) => a + e.series * (e.desc + 45), 0) / 60)} min</p>
         <a class="btn ${wDone ? 'ghost' : 'primary'}" href="#/treino">${wDone ? 'Treino concluído ✓ — revisar' : 'Começar treino'}</a>`
-      : `<h3>Descanso ativo</h3><p class="muted">Caminhada de 30–45 min e ${fmt(p.stepsGoal)} passos. Recuperar também constrói o shape.</p>
-        <button class="check wide ${log.cardio ? 'on' : ''}" data-act="cardio"><span class="box">${icon('check')}</span><span class="n">Caminhada feita</span></button>`}
+      : `<h3>Descanso ativo</h3><p class="muted">Sem musculação hoje — o cardio abaixo e ${fmt(p.stepsGoal)} passos mantêm o déficit. Recuperar também constrói o shape.</p>`}
     </section>
+
+    ${cardioCard(d, true)}
 
     <section class="card">
       <div class="card-h"><h2>${icon('drop')} Hábitos</h2></div>
@@ -155,8 +157,6 @@ const views = {
         <div><b>Sono</b><small>meta 7–9 h</small></div>
         <input type="number" inputmode="decimal" step="0.5" class="inp" data-field="sleep" value="${log.sleep || ''}" placeholder="h">
       </div>
-      ${train ? `<div class="habit"><div><b>Cardio leve</b><small>20 min pós-treino (opcional)</small></div>
-        <button class="check sq ${log.cardio ? 'on' : ''}" data-act="cardio" aria-label="cardio"><span class="box">${icon('check')}</span></button></div>` : ''}
     </section>
 
     ${weekend ? weekendCard(dow) : ''}
@@ -212,14 +212,7 @@ const views = {
 
     ${session}
 
-    <section class="card">
-      <div class="card-h"><h2>${icon('flame')} Cardio para o tanquinho</h2></div>
-      <ul class="bullets">
-        <li><b>${fmt(p.stepsGoal)} passos/dia</b> — o cardio que mais queima gordura sem roubar recuperação.</li>
-        <li><b>2–3x por semana:</b> 20–30 min de esteira inclinada (10–12%, 5 km/h) após o treino.</li>
-        <li><b>Abdômen</b> já está nos treinos. Tanquinho aparece com <b>~10–12% de gordura</b>: quem revela é a dieta.</li>
-      </ul>
-    </section>`;
+    ${cardioCard(date, false)}`;
   },
 
   dieta() {
@@ -322,6 +315,11 @@ const views = {
     const totalMeals = keys.length * mealIds.length;
     const eaten = keys.reduce((a, x) => a + mealIds.filter((id) => logs[x].meals?.[id]).length, 0);
     const adherence = totalMeals ? Math.round((eaten / totalMeals) * 100) : 0;
+    const cardioAll = keys.flatMap((x) => logs[x].cardioSessions || []);
+    const cardioMin = cardioAll.reduce((a, x) => a + x.min, 0);
+    const cardioKcal = cardioAll.reduce((a, x) => a + x.kcal, 0);
+    const stepDays = keys.filter((x) => logs[x].steps > 0);
+    const stepsAvg = stepDays.length ? stepDays.reduce((a, x) => a + logs[x].steps, 0) / stepDays.length : 0;
     const waistSorted = [...waist].sort((a, b) => a.date.localeCompare(b.date));
 
     return `
@@ -356,6 +354,8 @@ const views = {
       <div class="stat card"><small>Ritmo necessário</small><b>${needed != null ? fmt(Math.max(0, needed), 2) : '—'}<i>kg/sem</i></b>${needed != null && cur && needed / cur > 0.012 ? '<em class="warn">meta agressiva — foque em cintura</em>' : ''}</div>
       <div class="stat card"><small>Cintura</small><b>${waistSorted.length ? fmt(waistSorted.at(-1).cm, 1) : '—'}<i>cm</i></b>${waistSorted.length > 1 ? `<em>${fmt(waistSorted.at(-1).cm - waistSorted[0].cm, 1)} cm</em>` : ''}</div>
       <div class="stat card"><small>Treinos feitos</small><b>${workouts}</b></div>
+      <div class="stat card"><small>Cardio total</small><b>${fmt(cardioMin)}<i>min</i></b><em>~${fmt(cardioKcal)} kcal</em></div>
+      <div class="stat card"><small>Passos (média)</small><b>${fmt(stepsAvg)}</b><em>meta ${fmt(p.stepsGoal)}</em></div>
       <div class="stat card"><small>Adesão à dieta</small><b>${adherence}<i>%</i></b><em>${adherence >= 90 ? 'excelente' : 'meta: 90%+'}</em></div>
     </section>
 
@@ -443,6 +443,59 @@ function weekendCard(dow, always = false) {
     <div class="card-h"><h2>${icon('shield')} ${title}</h2></div>
     <ul class="bullets">${WEEKEND_RULES.map((r) => `<li>${r}</li>`).join('')}</ul>
     <p class="muted xs">1 fim de semana livre ≈ 3.000–5.000 kcal extras ≈ metade do déficit da semana. Com ${Math.max(0, daysUntil(get().profile.goalDate))} dias, cada um conta.</p>
+  </section>`;
+}
+
+function cardioCard(date, compact) {
+  const { profile: p, logs } = get();
+  const log = dayLog(date);
+  const sess = log.cardioSessions || [];
+  const presc = cardioToday(p, date);
+  const kg = avgWeight(get().weights, date, 7) ?? p.weight;
+  const done = (tipo) => sess.some((x) => x.tipo === tipo && !x.extra);
+  const z = heartZones(p.age);
+  const rx = presc.map((c) => {
+    const T = CARDIO_TYPES[c.tipo];
+    const ok = done(c.tipo);
+    return `<div class="rx ${ok ? 'on' : ''}">
+      <span class="emoji">${T.icone}</span>
+      <div class="grow"><b>${T.nome} · ${c.min} min</b><small>${c.quando} · ~${kcalOf(c.tipo, c.min, kg)} kcal · FC ${c.tipo === 'hiit' ? `${z.hiit[0]}–${z.hiit[1]}` : `${z.liss[0]}–${z.liss[1]}`} bpm</small>${compact ? '' : `<small class="como">${T.como}</small>`}</div>
+      ${c.tipo === 'hiit' && !ok ? `<button class="icon-btn" data-act="hiit" aria-label="timer HIIT">${icon('timer')}</button>` : ''}
+      <button class="check sq ${ok ? 'on' : ''}" data-act="cardioLog" data-tipo="${c.tipo}" data-min="${c.min}" aria-label="feito"><span class="box">${icon('check')}</span></button>
+    </div>`;
+  }).join('');
+  const sum = weekSummary(p, logs, date);
+  const head = `<div class="card-h"><h2>${icon('flame')} Cardio${compact ? ' de hoje' : ''}</h2><span class="pill">${sum.min}/${sum.target} min na semana</span></div>`;
+
+  if (compact) {
+    return `<section class="card ${presc.length && presc.every((c) => c.quando.includes('opcional') || done(c.tipo)) ? 'done' : ''}">${head}
+      ${rx || `<p class="muted sm">Sem cardio programado hoje — foco nos ${fmt(p.stepsGoal)} passos.</p>`}
+      <div class="bar mt8"><i style="width:${sum.target ? Math.min(100, (sum.min / sum.target) * 100) : 0}%;background:var(--fat)"></i></div>
+    </section>`;
+  }
+
+  const { phase, plan } = weekCardio(p, date);
+  const extras = sess.map((x, i) => !x.extra ? '' : `<li><span>${CARDIO_TYPES[x.tipo].icone} ${CARDIO_TYPES[x.tipo].nome} · ${x.min} min</span><span class="muted">~${x.kcal} kcal <button class="link" data-act="cardioDel" data-i="${i}">remover</button></span></li>`).join('');
+  return `<section class="card">${head}
+    <p class="muted sm">Semana ${phase.semana} · fase <b>${phase.nome}</b>: ${phase.liss}× ${phase.min} min pós-treino${phase.hiit ? ' + 1 HIIT' : ''} + caminhada nos dias de descanso. O volume sobe aos poucos até 25/12.</p>
+    <div class="rxs">${rx || `<p class="muted sm">Hoje sem cardio programado. Passos: ${fmt(p.stepsGoal)}.</p>`}</div>
+    ${extras ? `<ul class="shop mt8">${extras}</ul>` : ''}
+    <details class="mt8"><summary>Registrar outro cardio</summary>
+      <div class="cform">
+        <select class="inp" id="cTipo">${Object.entries(CARDIO_TYPES).map(([k, t]) => `<option value="${k}">${t.icone} ${t.nome}</option>`).join('')}</select>
+        <input class="inp" id="cMin" type="number" inputmode="numeric" placeholder="min">
+        <button class="btn primary" data-act="cardioCustom">Salvar</button>
+      </div>
+    </details>
+    <ul class="week">${[1, 2, 3, 4, 5, 6, 0].map((dw) => `<li class="${dw === date.getDay() ? 'today' : ''}"><span>${WEEKDAYS[dw]}</span><b>${(plan[dw] || []).map((c) => `${CARDIO_TYPES[c.tipo].icone} ${c.min}'${c.quando.includes('opcional') ? '*' : ''}`).join(' + ') || '—'}</b></li>`).join('')}</ul>
+    <p class="muted xs">* opcional. FC máxima estimada ${z.max} bpm · LISS ${z.liss[0]}–${z.liss[1]} · HIIT ${z.hiit[0]}–${z.hiit[1]}.</p>
+    <label class="fld mt8"><small>Meu cardio pós-treino preferido</small>
+      <select class="inp" data-cardio-pref>${Object.entries(CARDIO_TYPES).filter(([k]) => k !== 'hiit').map(([k, t]) => `<option value="${k}" ${k === (p.cardioType || 'esteira') ? 'selected' : ''}>${t.icone} ${t.nome}</option>`).join('')}</select></label>
+    <ul class="bullets mt8">
+      <li><b>${fmt(p.stepsGoal)} passos/dia</b> contam tanto quanto o cardio — não pule.</li>
+      <li>Cardio <b>depois</b> da musculação, nunca antes: força primeiro preserva músculo.</li>
+      <li>HIIT longe do treino de pernas. Se as cargas caírem, troque o HIIT por caminhada.</li>
+    </ul>
   </section>`;
 }
 
@@ -538,9 +591,16 @@ function chart(p, weights) {
 
 // ------------------------------------------------------------ timer de descanso
 const timer = { end: 0, id: null };
-function startRest(sec) {
+function runPhases(list, i = 0) {
+  if (i >= list.length) return;
+  const ph = list[i];
+  startRest(ph.sec, ph.label, i < list.length - 1 ? () => runPhases(list, i + 1) : null, ph.hot);
+}
+function startRest(sec, label = 'Descanso', next = null, hot = false) {
   timer.end = Date.now() + sec * 1000;
   $('#rest').classList.add('show');
+  $('#rest').classList.toggle('hot', hot);
+  $('#rest .rest-l').textContent = label;
   clearInterval(timer.id);
   const tickT = () => {
     const left = Math.max(0, Math.round((timer.end - Date.now()) / 1000));
@@ -550,7 +610,9 @@ function startRest(sec) {
       clearInterval(timer.id);
       beep();
       if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
-      $('#rest .rest-t').textContent = 'Bora!';
+      if (next) return next();
+      $('#rest').classList.remove('hot');
+      $('#rest .rest-t').textContent = label === 'Descanso' ? 'Bora!' : 'Fim!';
       setTimeout(() => $('#rest').classList.remove('show'), 2500);
     }
   };
@@ -641,7 +703,29 @@ document.addEventListener('click', async (ev) => {
       }
       break;
     }
-    case 'cardio': update(() => { const l = dayLog(); l.cardio = !l.cardio; }); break;
+    case 'cardioLog': {
+      const tipo = b.dataset.tipo, min = Number(b.dataset.min);
+      const kg = avgWeight(get().weights, today(), 7) ?? p.weight;
+      let added = false;
+      update(() => {
+        const l = dayLog(); l.cardioSessions = l.cardioSessions || [];
+        const i = l.cardioSessions.findIndex((x) => x.tipo === tipo && !x.extra);
+        if (i >= 0) l.cardioSessions.splice(i, 1); else { l.cardioSessions.push({ tipo, min, kcal: kcalOf(tipo, min, kg) }); added = true; }
+        l.cardio = l.cardioSessions.length > 0;
+      });
+      if (added) toast('🔥 Cardio registrado', `~${kcalOf(tipo, min, kg)} kcal a mais no déficit.`);
+      break;
+    }
+    case 'cardioCustom': {
+      const tipo = $('#cTipo').value, min = parseInt($('#cMin').value, 10);
+      if (!min || min < 1) return toast('Digite os minutos');
+      const kg = avgWeight(get().weights, today(), 7) ?? p.weight;
+      update(() => { const l = dayLog(); (l.cardioSessions = l.cardioSessions || []).push({ tipo, min, kcal: kcalOf(tipo, min, kg), extra: true }); l.cardio = true; });
+      toast('Cardio registrado ✓', `${CARDIO_TYPES[tipo].nome} · ${min} min`);
+      break;
+    }
+    case 'cardioDel': update(() => { const l = dayLog(); l.cardioSessions.splice(Number(b.dataset.i), 1); l.cardio = l.cardioSessions.length > 0; }); break;
+    case 'hiit': runPhases(hiitPhases()); toast('HIIT iniciado', 'Aquecimento de 3 min. Vou apitar a cada troca.'); return;
     case 'water': update(() => { const l = dayLog(); l.water = Math.max(0, l.water + Number(b.dataset.v)); }); break;
     case 'days': update((s) => { const n = Number(b.dataset.n); s.profile.trainDays = [...DEFAULT_DAYS[n]]; }); break;
     case 'toggleDay': {
@@ -753,6 +837,7 @@ document.addEventListener('click', async (ev) => {
 
 document.addEventListener('change', (ev) => {
   const t = ev.target;
+  if (t.dataset.cardioPref !== undefined) { update((s) => { s.profile.cardioType = t.value; }); return render(); }
   if (t.dataset.field) { update(() => { dayLog()[t.dataset.field] = Number(t.value) || 0; }); return; }
   if (t.dataset.set !== undefined && t.dataset.name) {
     update(() => {

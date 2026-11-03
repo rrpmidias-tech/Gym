@@ -5,6 +5,7 @@
 // ============================================================
 import { mealPlan, isTrainDay, workoutFor, nutrition, iso, formatItem } from './calc.js';
 import { exName } from './exercises.js';
+import { cardioToday, CARDIO_TYPES } from './cardio.js';
 import { WORKOUTS, WEEKDAYS } from './data.js';
 import { get, update, dayLog } from './store.js';
 
@@ -36,13 +37,16 @@ export function scheduleFor(date = new Date()) {
       title: '💧 Bebe água', body: `Meta do dia: ${(nut.water / 1000).toFixed(1).replace('.', ',')} L (${glasses} copos). Alvo até agora: ${Math.round(((i + 1) / 6) * glasses)} copos.` });
   });
 
+  const cardio = cardioToday(p, date);
+  const cardioTxt = cardio.map((c) => `${CARDIO_TYPES[c.tipo].nome} ${c.min} min`).join(' + ');
   if (isTrainDay(p, date)) {
     const w = WORKOUTS[workoutFor(p, date)];
     ev.push({ id: 'train', time: toHHMM(toMin(p.trainTime) - 30), kind: 'train',
-      title: `🏋️ Treino em 30 min: ${w.nome}`, body: `${w.foco}. Pré-treino feito? Bora!` });
+      title: `🏋️ Treino em 30 min: ${w.nome}`, body: `${w.foco}.${cardio.length ? ` Depois: ${cardioTxt}.` : ''} Pré-treino feito? Bora!` });
   } else {
     ev.push({ id: 'cardio', time: toHHMM(toMin(p.wakeTime) + 30), kind: 'train',
-      title: '🚶 Dia de descanso ativo', body: `Caminhada 40 min + meta de ${p.stepsGoal.toLocaleString('pt-BR')} passos. Carbo mais baixo hoje.` });
+      title: cardio.some((c) => c.tipo === 'hiit') ? '🔥 Dia de HIIT + descanso ativo' : '🚶 Dia de descanso ativo',
+      body: `${cardioTxt || 'Caminhada'} + meta de ${p.stepsGoal.toLocaleString('pt-BR')} passos. Carbo mais baixo hoje.` });
   }
 
   if (dow === 1) ev.push({ id: 'weigh', time: p.wakeTime, kind: 'check', title: '⚖️ Pesagem da semana', body: 'Em jejum, após o banheiro. Registre no app + medida da cintura.' });

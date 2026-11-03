@@ -359,3 +359,21 @@ select.inp { appearance: none; }
 .gday button { width: 64px; height: 84px; border-radius: 10px; overflow: hidden; flex: none; padding: 0; background: var(--bg2); }
 .gday img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sheet .full { width: 100%; border-radius: 14px; margin-top: 12px; display: block; }
+
+/* ---------- v3: cardio ---------- */
+.mt8 { margin-top: 10px; }
+.rxs { display: grid; gap: 8px; margin-top: 12px; }
+.rx { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 14px; background: var(--bg2); border: 1px solid var(--line); }
+.rx + .rx { margin-top: 8px; }
+.rxs .rx + .rx { margin-top: 0; }
+.rx.on { border-color: rgb(198 244 50 / .3); }
+.rx.on b { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--dim); }
+.rx .emoji { width: 38px; height: 38px; font-size: 18px; }
+.rx .grow { display: grid; gap: 2px; }
+.rx b { font-size: 14px; }
+.rx small { font-size: 12px; color: var(--muted); }
+.rx small.como { color: var(--dim); }
+.cform { display: grid; grid-template-columns: 1fr 80px auto; gap: 8px; margin-top: 10px; }
+.cform .inp { text-align: left; }
+.cform .btn { margin: 0; }
+.rest.hot { background: var(--fat); box-shadow: 0 16px 40px -10px rgb(255 122 144 / .6); }
