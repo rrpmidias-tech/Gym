@@ -1,7 +1,7 @@
 // ============================================================
 // Cálculos: gasto energético, macros, carb cycling, plano de refeições
 // ============================================================
-import { FOODS, MEAL_TEMPLATES, SPLITS } from './data.js';
+import { FOODS, MEAL_TEMPLATES, WEEKEND_TEMPLATES, SPLITS } from './data.js';
 
 export const ACTIVITY = [
   { v: 1.375, label: 'Leve', desc: 'Trabalho sentado, treino 2–3x' },
@@ -93,7 +93,8 @@ export function mealPlan(p, date, swaps = {}) {
   const trainDay = isTrainDay(p, date);
   const D = trainDay ? nut.train : nut.rest;
 
-  return MEAL_TEMPLATES.map((tpl) => {
+  const templates = usesWeekendMenu(p, date) ? WEEKEND_TEMPLATES : MEAL_TEMPLATES;
+  return templates.map((tpl) => {
     const T = { p: D.p * tpl.pct.p, c: D.c * tpl.pct.c, g: D.g * tpl.pct.g };
     const items = tpl.fixos.map(([f, g]) => [f, g]);
     if (tpl.extraCarb) items.push([...tpl.extraCarb]);
@@ -120,10 +121,15 @@ export function mealPlan(p, date, swaps = {}) {
       if (g >= 3) items.push([fat, g]);
     }
 
-    const nome = tpl.treino && !trainDay ? 'Lanche da tarde' : tpl.nome;
+    const nome = tpl.treino && !trainDay && templates === MEAL_TEMPLATES ? 'Lanche da tarde' : tpl.nome;
     const time = p.mealTimes[tpl.id];
     return { id: tpl.id, nome, icone: tpl.icone, time, items, macros: cur(), slots: { prot: tpl.prot, carb: tpl.carb, fat: tpl.fat } };
   });
+}
+
+export function usesWeekendMenu(p, date) {
+  const d = date.getDay();
+  return p.weekendMenu !== false && (d === 0 || d === 6);
 }
 
 export function formatItem([food, grams]) {

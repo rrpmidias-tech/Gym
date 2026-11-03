@@ -26,6 +26,10 @@ export const FOODS = {
   azeite:   { nome: 'Azeite extra virgem', kcal: 884, p: 0, c: 0, g: 100 },
   amendoim: { nome: 'Pasta de amendoim', kcal: 588, p: 25, c: 20, g: 50 },
   salada:   { nome: 'Salada / legumes à vontade', kcal: 25, p: 1.5, c: 4, g: 0.2 },
+  alcatra:  { nome: 'Alcatra/fraldinha grelhada (sem gordura)', kcal: 241, p: 31.9, c: 0, g: 11.6 },
+  acai:     { nome: 'Polpa de açaí sem açúcar', kcal: 58, p: 0.8, c: 6.2, g: 3.9 },
+  paoHamb:  { nome: 'Pão de hambúrguer', kcal: 270, p: 9, c: 49, g: 4, unidade: 60, un: 'pão(es)' },
+  queijo:   { nome: 'Queijo muçarela light', kcal: 250, p: 25, c: 2, g: 15, unidade: 20, un: 'fatia(s)' },
 };
 
 // Grupos de substituição (troca por macro principal equivalente)
@@ -46,6 +50,8 @@ export const SWAPS = {
   cottage: ['iogurte'],
   azeite: ['amendoim'],
   amendoim: ['azeite'],
+  alcatra: ['frango', 'patinho', 'tilapia'],
+  paoHamb: ['pao', 'tapioca', 'batata'],
 };
 
 // Modelos de refeição. pct = fração dos macros do dia.
@@ -62,6 +68,56 @@ export const MEAL_TEMPLATES = [
   { id: 'jantar', nome: 'Jantar (pós-treino)', icone: '🍽️', pct: { p: 0.25, c: 0.15, g: 0.3 },
     fixos: [['salada', 200]], prot: 'patinho', carb: 'batata', fat: 'azeite' },
 ];
+
+// Cardápio de fim de semana: mesmos horários e macros, comida com cara de "fim de semana".
+// Mesmos ids das refeições da semana → alertas e checklist continuam funcionando.
+export const WEEKEND_TEMPLATES = [
+  { id: 'cafe', nome: 'Brunch: crepioca', icone: '🥞', pct: { p: 0.2, c: 0.2, g: 0.25 },
+    fixos: [['ovo', 100], ['queijo', 20]], prot: 'clara', carb: 'tapioca', extraCarb: ['frutas', 100], fat: null },
+  { id: 'lanche1', nome: 'Açaí fit', icone: '🍇', pct: { p: 0.15, c: 0.1, g: 0.1 },
+    fixos: [['acai', 150]], prot: 'whey', carb: 'banana', fat: null },
+  { id: 'almoco', nome: 'Churrasco inteligente', icone: '🥩', pct: { p: 0.25, c: 0.3, g: 0.3 },
+    fixos: [['salada', 250]], prot: 'alcatra', carb: 'mandioca', fat: null },
+  { id: 'pre', nome: 'Panqueca de banana', icone: '🍌', pct: { p: 0.15, c: 0.25, g: 0.05 },
+    fixos: [['ovo', 50]], prot: 'whey', carb: 'aveia', extraCarb: ['banana', 100], fat: null, treino: true },
+  { id: 'jantar', nome: 'Hambúrguer caseiro', icone: '🍔', pct: { p: 0.25, c: 0.15, g: 0.3 },
+    fixos: [['salada', 100], ['queijo', 20]], prot: 'patinho', carb: 'paoHamb', fat: null },
+];
+
+export const WEEKEND_TIPS = {
+  cafe: 'Massa: 1 ovo + claras + goma na frigideira antiaderente. Recheio: queijo + frutas por cima ou do lado.',
+  lanche1: 'Bata a polpa com whey e banana congelada. Sem granola, leite condensado ou xarope.',
+  almoco: 'Vale para churrasco fora: pese a carne no olho (palma da mão ≈ 120 g). Mandioca cozida, não frita. Vinagrete à vontade.',
+  pre: 'Amasse a banana, misture ovo, aveia e whey. Frigideira antiaderente, 2 min de cada lado.',
+  jantar: 'Patinho moído temperado em disco, grelhado. Alface, tomate, cebola, mostarda ou ketchup zero. Sem batata frita.',
+};
+
+// Alternativas por padrão de movimento — para adaptar aos aparelhos da sua academia
+export const EX_ALTS = {
+  'Agachamento': ['Agachamento livre', 'Agachamento hack', 'Agachamento hack / búlgaro', 'Leg press 45°', 'Agachamento no Smith', 'Agachamento goblet', 'Pêndulo / Belt squat', 'Leg press horizontal'],
+  'Dobradiça de quadril': ['Levantamento terra romeno (RDL)', 'Stiff com barra', 'Stiff com halteres', 'Stiff no Smith', 'Good morning', 'Hip thrust', 'Glúteo na máquina / polia'],
+  'Supino horizontal': ['Supino reto com barra', 'Supino reto com halteres', 'Supino máquina / Crucifixo', 'Supino máquina', 'Supino reto no Smith', 'Flexão de braço (com carga)'],
+  'Supino inclinado': ['Supino inclinado com barra', 'Supino inclinado com halteres', 'Supino inclinado no Smith', 'Supino inclinado máquina'],
+  'Crucifixo': ['Crucifixo / Peck deck', 'Crossover polia alta→baixa', 'Peck deck', 'Crucifixo com halteres', 'Crossover polia baixa→alta'],
+  'Desenvolvimento': ['Desenvolvimento com halteres', 'Desenvolvimento militar', 'Desenvolvimento máquina', 'Desenvolvimento no Smith', 'Desenvolvimento Arnold'],
+  'Elevação lateral': ['Elevação lateral', 'Elevação lateral na polia', 'Elevação lateral máquina', 'Elevação lateral sentado'],
+  'Puxada vertical': ['Barra fixa / Puxada frente', 'Barra fixa (ou puxada)', 'Barra fixa / Puxada pronada', 'Puxada frente pegada aberta', 'Puxada frente pegada neutra', 'Pulldown unilateral', 'Barra fixa graviton', 'Puxada articulada (máquina)'],
+  'Remada': ['Remada curvada', 'Remada cavalinho', 'Remada sentada na polia', 'Remada unilateral com halter', 'Remada máquina articulada', 'Remada no Smith', 'Remada apoiada no banco (halteres)'],
+  'Ombro posterior': ['Face pull', 'Crucifixo inverso', 'Peck deck inverso', 'Crucifixo inverso na polia'],
+  'Bíceps': ['Rosca direta', 'Rosca direta com barra W', 'Rosca inclinada com halteres', 'Rosca martelo', 'Rosca concentrada', 'Rosca Scott', 'Rosca na polia', 'Rosca alternada'],
+  'Tríceps': ['Tríceps corda', 'Tríceps francês', 'Tríceps testa', 'Mergulho nas paralelas', 'Tríceps barra reta na polia', 'Tríceps coice na polia', 'Tríceps máquina'],
+  'Braços (bi-set)': ['Rosca martelo + Tríceps francês (bi-set)', 'Rosca direta + Tríceps corda (bi-set)', 'Rosca Scott + Tríceps testa (bi-set)'],
+  'Extensora': ['Cadeira extensora', 'Sissy squat', 'Extensora unilateral'],
+  'Flexora': ['Cadeira flexora', 'Mesa flexora', 'Flexora em pé (unilateral)', 'Flexão nórdica'],
+  'Afundo': ['Afundo búlgaro', 'Passada / Avanço', 'Afundo no Smith', 'Step-up no banco'],
+  'Panturrilha': ['Panturrilha em pé', 'Panturrilha sentado', 'Panturrilha no leg press', 'Panturrilha no Smith'],
+  'Abdômen': ['Abdominal na polia (crunch)', 'Elevação de pernas suspenso', 'Roda abdominal', 'Prancha frontal', 'Abdominal infra no banco', 'Prancha lateral', 'Abdominal máquina', 'Dead bug', 'Elevação de pernas no banco'],
+};
+
+export function altsFor(name) {
+  const entry = Object.entries(EX_ALTS).find(([, list]) => list.includes(name));
+  return entry ? { padrao: entry[0], list: entry[1] } : null;
+}
 
 // ------------------------------------------------------------
 // Exercícios: [nome, séries, reps, descanso(s), grupo, dica]

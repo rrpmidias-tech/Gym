@@ -4,6 +4,7 @@
 // - Exportação .ics com alarmes recorrentes (funciona com o celular bloqueado)
 // ============================================================
 import { mealPlan, isTrainDay, workoutFor, nutrition, iso, formatItem } from './calc.js';
+import { exName } from './exercises.js';
 import { WORKOUTS, WEEKDAYS } from './data.js';
 import { get, update, dayLog } from './store.js';
 
@@ -140,19 +141,19 @@ export function buildICS() {
       'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${esc(title)}`, 'TRIGGER:PT0M', 'END:VALARM', 'END:VEVENT');
   };
 
-  // Refeições: dia de treino x descanso podem ter quantidades diferentes → uma regra por tipo de dia
-  const trainDays = p.trainDays.map((d) => BYDAY[d]);
-  const restDays = BYDAY.filter((_, i) => !p.trainDays.includes(i));
-  const sample = (train) => {
-    const d = new Date();
-    for (let i = 0; i < 7; i++) { if (isTrainDay(p, d) === train) return d; d.setDate(d.getDate() + 1); }
-    return d;
-  };
-  [[true, trainDays], [false, restDays]].forEach(([train, days]) => {
-    if (!days.length) return;
-    mealPlan(p, sample(train), get().swaps).forEach((m) => {
-      vevent(`${m.icone} ${m.nome}`, m.items.map(formatItem).join('\n'), m.time, `FREQ=WEEKLY;BYDAY=${days.join(',')}`);
+  // Refeições: agrupa dias com plano idêntico (treino, descanso, fim de semana) em uma regra
+  const groups = new Map();
+  for (let dow = 0; dow < 7; dow++) {
+    const date = new Date();
+    while (date.getDay() !== dow) date.setDate(date.getDate() + 1);
+    mealPlan(p, date, get().swaps).forEach((m) => {
+      const key = `${m.nome}|${m.time}|${JSON.stringify(m.items)}`;
+      if (!groups.has(key)) groups.set(key, { m, days: [] });
+      groups.get(key).days.push(BYDAY[dow]);
     });
+  }
+  groups.forEach(({ m, days }) => {
+    vevent(`${m.icone} ${m.nome}`, m.items.map(formatItem).join('\n'), m.time, `FREQ=WEEKLY;BYDAY=${days.join(',')}`);
   });
 
   // Treinos por dia da semana
@@ -160,7 +161,7 @@ export function buildICS() {
     const date = new Date();
     while (date.getDay() !== d) date.setDate(date.getDate() + 1);
     const w = WORKOUTS[workoutFor(p, date)];
-    vevent(`🏋️ Treino: ${w.nome}`, w.ex.map((e) => `${e.nome} ${e.series}x${e.reps}`).join('\n'), p.trainTime, `FREQ=WEEKLY;BYDAY=${BYDAY[d]}`, 75);
+    vevent(`🏋️ Treino: ${w.nome}`, w.ex.map((e, i) => `${exName(p, workoutFor(p, date), i)} ${e.series}x${e.reps}`).join('\n'), p.trainTime, `FREQ=WEEKLY;BYDAY=${BYDAY[d]}`, 75);
   });
 
   vevent('💧 Água', 'Bebe 500 ml agora.', '10:45', 'FREQ=DAILY', 5);

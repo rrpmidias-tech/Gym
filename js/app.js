@@ -1,9 +1,11 @@
 // ============================================================
 // SHAPE 25/12 — app principal (roteamento + telas)
 // ============================================================
-import { WORKOUTS, SPLITS, DEFAULT_DAYS, WEEKDAYS, WEEKDAYS_FULL, WEEKEND_RULES, SCIENCE_NOTES, FOODS, SWAPS, MEAL_TEMPLATES } from './data.js';
-import { nutrition, mealPlan, isTrainDay, workoutFor, formatItem, equivalent, macrosOf, weeklyCheck, avgWeight, iso, daysUntil, ACTIVITY, DEFICITS } from './calc.js';
+import { WORKOUTS, SPLITS, DEFAULT_DAYS, WEEKDAYS, WEEKDAYS_FULL, WEEKEND_RULES, WEEKEND_TIPS, SCIENCE_NOTES, FOODS, SWAPS, MEAL_TEMPLATES, altsFor } from './data.js';
+import { usesWeekendMenu, nutrition, mealPlan, isTrainDay, workoutFor, formatItem, equivalent, macrosOf, weeklyCheck, avgWeight, iso, daysUntil, ACTIVITY, DEFICITS } from './calc.js';
 import { get, update, save, dayLog, lastSets, dietStreak, exportJSON, importJSON, reset } from './store.js';
+import { exName, isSwapped } from './exercises.js';
+import { addPhoto, listPhotos, getPhoto, deletePhoto } from './photos.js';
 import { startTicker, onToast, requestPermission, testNotification, buildICS, scheduleFor, nextEvent } from './notify.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -31,6 +33,8 @@ const I = {
   shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
   cart: '<path d="M3 4h2l2.5 11h11L21 7H6.5"/><circle cx="9" cy="19.5" r="1.5"/><circle cx="17" cy="19.5" r="1.5"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/>',
 };
 const icon = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`;
 
@@ -187,7 +191,7 @@ const views = {
           ${ring(doneSets / totalSets, 60, 6, `<b>${doneSets}</b><small>/${totalSets}</small>`)}</div>
         <div class="tipbox">${icon('info')} <span>Deixe <b>1–2 repetições na reserva</b> (RIR). Bateu o topo da faixa em todas as séries? <b>Suba 2,5 kg</b> na próxima. No déficit, a meta é <b>manter as cargas</b>.</span></div>
       </section>
-      ${w.ex.map((e, i) => exerciseCard(e, i, log, k)).join('')}
+      ${w.ex.map((e, i) => exerciseCard(e, i, log, k, wk)).join('')}
       <button class="btn ${log.workout.done ? 'ghost' : 'primary'} block" data-act="finish">${log.workout.done ? 'Treino concluído ✓' : 'Finalizar treino'}</button>`;
     } else {
       session = `<section class="card"><h3>Hoje é descanso ativo 🚶</h3>
@@ -222,10 +226,16 @@ const views = {
     const { profile: p, swaps } = get();
     const nut = nutrition(p);
     const d = today();
-    const isTrain = ui.dietDay ?? isTrainDay(p, d);
-    // Data de referência com o tipo de dia selecionado
+    const wkMenu = p.weekendMenu !== false;
+    const kindOf = (dt) => (usesWeekendMenu(p, dt) ? 'wknd' : isTrainDay(p, dt) ? 'train' : 'rest');
+    let kind = ui.dietDay ?? kindOf(d);
+    if (kind === 'wknd' && !wkMenu) kind = 'train';
+    // Data de referência (a partir de hoje) com o tipo de dia selecionado
     const ref = new Date(d);
-    for (let i = 0; i < 7 && isTrainDay(p, ref) !== isTrain; i++) ref.setDate(ref.getDate() + 1);
+    for (let i = 0; i < 7 && kindOf(ref) !== kind; i++) ref.setDate(ref.getDate() + 1);
+    if (kindOf(ref) !== kind) { ref.setTime(d.getTime()); kind = kindOf(d); }
+    const isTrain = isTrainDay(p, ref);
+    const weekendPlan = usesWeekendMenu(p, ref);
     const showingToday = iso(ref) === iso(d);
     const meals = mealPlan(p, ref, swaps);
     const D = isTrain ? nut.train : nut.rest;
@@ -238,9 +248,11 @@ const views = {
 
     <section class="card">
       <div class="seg">
-        <button class="${isTrain ? 'on' : ''}" data-act="dietDay" data-v="1">Dia de treino</button>
-        <button class="${!isTrain ? 'on' : ''}" data-act="dietDay" data-v="0">Dia de descanso</button>
+        <button class="${kind === 'train' ? 'on' : ''}" data-act="dietDay" data-v="train">Treino</button>
+        <button class="${kind === 'rest' ? 'on' : ''}" data-act="dietDay" data-v="rest">Descanso</button>
+        ${wkMenu ? `<button class="${kind === 'wknd' ? 'on' : ''}" data-act="dietDay" data-v="wknd">Sáb/Dom</button>` : ''}
       </div>
+      ${weekendPlan ? `<p class="muted sm center wk-note">🎉 Cardápio de fim de semana: comida com cara de fim de semana, <b>mesmos macros</b>. ${isTrain ? 'Dia de treino.' : 'Dia de descanso.'}</p>` : ''}
       <div class="kcal-big"><b>${fmt(D.kcal)}</b><span>kcal</span></div>
       <div class="mgrid">
         <div style="--c:var(--prot)"><b>${D.p}g</b><small>Proteína</small></div>
@@ -261,6 +273,7 @@ const views = {
           const orig = slot?.[1];
           return `<li><span>${esc(formatItem([f, g]))}</span>${SWAPS[f] && orig ? `<button class="icon-btn" data-act="swap" data-meal="${m.id}" data-orig="${orig}" data-food="${f}" data-g="${g}" aria-label="trocar">${icon('swap')}</button>` : ''}</li>`;
         }).join('')}</ul>
+        ${weekendPlan && WEEKEND_TIPS[m.id] ? `<p class="dica">${WEEKEND_TIPS[m.id]}</p>` : ''}
         <div class="meal-m"><span>${fmt(m.macros.kcal)} kcal</span><span class="p">P ${fmt(m.macros.p)}g</span><span class="c">C ${fmt(m.macros.c)}g</span><span class="g">G ${fmt(m.macros.g)}g</span></div>
       </section>`).join('')}
 
@@ -321,6 +334,13 @@ const views = {
         <button class="btn primary" data-act="logWeight">Salvar</button>
       </div>
       ${chart(p, weights)}
+    </section>
+
+    <section class="card" id="photos">
+      <div class="card-h"><h2>${icon('camera')} Fotos de progresso</h2></div>
+      <p class="muted sm">Toda segunda, mesma luz, mesmo lugar, em jejum. A foto mostra o que a balança esconde.</p>
+      <div class="poses">${POSES.map(([k, l]) => `<label class="btn ghost">${icon('camera')} ${l}<input type="file" accept="image/*" hidden data-photo="${k}"></label>`).join('')}</div>
+      <div id="photoBody"><p class="muted xs">Carregando…</p></div>
     </section>
 
     ${check ? `<section class="card checkin ${check.tone}">
@@ -386,6 +406,14 @@ const views = {
       <p class="muted xs">Dias de treino e horários de cada refeição são ajustados nas abas Treino e Dieta.</p>
     </section>
 
+    <section class="card">
+      <div class="card-h"><h2>${icon('food')} Cardápio de sábado e domingo</h2></div>
+      <div class="opts">
+        <button class="opt ${p.weekendMenu !== false ? 'on' : ''}" data-act="weekendMenu" data-v="1"><b>Cardápio de fim de semana</b><small>Crepioca, açaí fit, churrasco, panqueca, hambúrguer caseiro — mesmos macros</small></button>
+        <button class="opt ${p.weekendMenu === false ? 'on' : ''}" data-act="weekendMenu" data-v="0"><b>Igual à semana</b><small>Mesma marmita todos os dias, zero decisão</small></button>
+      </div>
+    </section>
+
     <section class="card summary">
       <div class="card-h"><h2>${icon('shield')} Seu plano calculado</h2></div>
       <div class="sumgrid">
@@ -418,25 +446,44 @@ function weekendCard(dow, always = false) {
   </section>`;
 }
 
-function exerciseCard(e, i, log, dateKey) {
-  const sets = log.workout.sets[e.nome] || Array.from({ length: e.series }, () => ({ w: '', r: '', done: false }));
-  const last = lastSets(e.nome, dateKey);
+function exerciseCard(e, i, log, dateKey, wk) {
+  const p = get().profile;
+  const name = exName(p, wk, i);
+  const swapped = isSwapped(p, wk, i);
+  const sets = log.workout.sets[name] || Array.from({ length: e.series }, () => ({ w: '', r: '', done: false }));
+  const last = lastSets(name, dateKey);
   const top = parseInt(String(e.reps).split('-')[1] || e.reps, 10);
   const lastTxt = last ? last.sets.map((s) => `${s.w}×${s.r}`).join(' · ') : null;
   const progress = last && !isNaN(top) && last.sets.length >= e.series && last.sets.every((s) => Number(s.r) >= top);
   const allDone = sets.every((s) => s.done);
+  const attrs = `data-i="${i}" data-name="${esc(name)}"`;
   return `<section class="card ex ${allDone ? 'done' : ''}" data-ex="${i}">
-    <div class="ex-h"><span class="num">${i + 1}</span><div><h3>${esc(e.nome)}</h3><p class="muted xs">${e.grupo} · ${e.series}×${e.reps} · descanso ${e.desc >= 60 ? `${Math.floor(e.desc / 60)}min${e.desc % 60 ? e.desc % 60 + 's' : ''}` : e.desc + 's'}</p></div></div>
-    ${e.dica ? `<p class="dica">${esc(e.dica)}</p>` : ''}
+    <div class="ex-h"><span class="num">${i + 1}</span><div class="grow"><h3>${esc(name)}</h3><p class="muted xs">${e.grupo} · ${e.series}×${e.reps} · descanso ${e.desc >= 60 ? `${Math.floor(e.desc / 60)}min${e.desc % 60 ? e.desc % 60 + 's' : ''}` : e.desc + 's'}${swapped ? ' · <span class="accent">trocado</span>' : ''}</p></div>
+      <button class="icon-btn" data-act="exSwap" data-wk="${wk}" data-i="${i}" aria-label="trocar exercício">${icon('swap')}</button></div>
+    ${e.dica && !swapped ? `<p class="dica">${esc(e.dica)}</p>` : ''}
     ${lastTxt ? `<p class="last">Última: <b>${lastTxt}</b>${progress ? ' <span class="up">↑ suba a carga</span>' : ''}</p>` : ''}
     <div class="sets">
       <div class="set head"><span>Série</span><span>kg</span><span>reps</span><span></span></div>
       ${sets.map((s, j) => `<div class="set ${s.done ? 'on' : ''}"><span>${j + 1}</span>
-        <input class="inp" type="number" inputmode="decimal" step="0.5" placeholder="${last?.sets[j]?.w ?? 'kg'}" value="${s.w}" data-set="${j}" data-k="w" data-name="${esc(e.nome)}">
-        <input class="inp" type="number" inputmode="numeric" placeholder="${e.reps}" value="${s.r}" data-set="${j}" data-k="r" data-name="${esc(e.nome)}">
-        <button class="check sq ${s.done ? 'on' : ''}" data-act="set" data-set="${j}" data-name="${esc(e.nome)}" data-rest="${e.desc}" data-n="${e.series}" aria-label="série feita"><span class="box">${icon('check')}</span></button></div>`).join('')}
+        <input class="inp" type="number" inputmode="decimal" step="0.5" placeholder="${last?.sets[j]?.w ?? 'kg'}" value="${s.w}" data-set="${j}" data-k="w" ${attrs}>
+        <input class="inp" type="number" inputmode="numeric" placeholder="${e.reps}" value="${s.r}" data-set="${j}" data-k="r" ${attrs}>
+        <button class="check sq ${s.done ? 'on' : ''}" data-act="set" data-set="${j}" ${attrs} data-rest="${e.desc}" data-n="${e.series}" aria-label="série feita"><span class="box">${icon('check')}</span></button></div>`).join('')}
     </div>
   </section>`;
+}
+
+function openExSwap(wk, i) {
+  const p = get().profile;
+  const cur = exName(p, wk, i);
+  const orig = WORKOUTS[wk].ex[i].nome;
+  const alts = altsFor(orig);
+  const list = [...new Set([orig, ...(alts?.list || []), cur])];
+  sheet(`<h2>Trocar exercício</h2>
+    <p class="muted sm">${alts ? `Padrão de movimento: <b>${alts.padrao}</b>. ` : ''}Escolha o que sua academia tem — mesmas séries, reps e descanso. O histórico de cargas é separado por exercício.</p>
+    <ul class="swaplist">${list.map((n) => `<li><button class="opt ${n === cur ? 'on' : ''}" data-act="doExSwap" data-wk="${wk}" data-i="${i}" data-to="${esc(n)}">
+      <b>${esc(n)}</b>${n === orig ? '<small>original do plano</small>' : ''}</button></li>`).join('')}</ul>
+    <div class="custom"><input class="inp" id="exCustom" placeholder="Outro aparelho (digite o nome)" maxlength="60"><button class="btn primary" data-act="exCustom" data-wk="${wk}" data-i="${i}">Usar</button></div>
+    <button class="btn ghost block" data-act="closeSheet">Fechar</button>`);
 }
 
 function shoppingList() {
@@ -522,6 +569,39 @@ function beep() {
   } catch { /* sem áudio */ }
 }
 
+// ------------------------------------------------------------ fotos
+const POSES = [['frente', 'Frente'], ['lado', 'Lado'], ['costas', 'Costas']];
+const urls = [];
+async function hydratePhotos() {
+  const el = $('#photoBody');
+  if (!el) return;
+  let list;
+  try { list = await listPhotos(); } catch { el.innerHTML = '<p class="muted xs">Fotos indisponíveis neste navegador.</p>'; return; }
+  urls.splice(0).forEach((u) => URL.revokeObjectURL(u));
+  const url = (ph) => { const u = URL.createObjectURL(ph.blob); urls.push(u); return u; };
+  if (!list.length) { el.innerHTML = '<p class="muted xs">Nenhuma foto ainda. Tire a primeira hoje — daqui a 7 semanas você vai querer comparar.</p>'; return; }
+  const pose = ui.comparePose || list.at(-1).pose;
+  const ofPose = list.filter((x) => x.pose === pose);
+  const first = ofPose[0], lastP = ofPose.at(-1);
+  const dd = (x) => new Date(x.date + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  const byDate = list.reduce((m, x) => ((m[x.date] = m[x.date] || []).push(x), m), {});
+  el.innerHTML = `
+    <div class="seg sm-seg">${POSES.map(([k, l]) => `<button class="${k === pose ? 'on' : ''}" data-act="comparePose" data-pose="${k}">${l}</button>`).join('')}</div>
+    ${ofPose.length ? `<div class="compare">
+      <figure><img src="${url(first)}" alt="Antes"><figcaption>Antes · ${dd(first)}</figcaption></figure>
+      <figure><img src="${url(lastP)}" alt="Agora"><figcaption>${ofPose.length > 1 ? 'Agora' : 'Única'} · ${dd(lastP)}</figcaption></figure>
+    </div>` : '<p class="muted xs">Sem fotos desta pose.</p>'}
+    <div class="gallery">${Object.entries(byDate).reverse().map(([date, ps]) => `<div class="gday"><small>${dd({ date })}</small><div>${ps.map((x) => `<button data-act="photo" data-id="${esc(x.id)}"><img src="${url(x)}" alt="${x.pose}" loading="lazy"></button>`).join('')}</div></div>`).join('')}</div>`;
+}
+async function openPhoto(id) {
+  const ph = await getPhoto(id);
+  if (!ph) return;
+  const u = URL.createObjectURL(ph.blob); urls.push(u);
+  sheet(`<h2>${POSES.find(([k]) => k === ph.pose)?.[1] || ''} · ${new Date(ph.date + 'T12:00').toLocaleDateString('pt-BR')}</h2>
+    <img class="full" src="${u}" alt="">
+    <div class="btns"><button class="btn danger" data-act="delPhoto" data-id="${esc(id)}">Apagar</button><button class="btn ghost" data-act="closeSheet">Fechar</button></div>`);
+}
+
 // ============================================================ roteamento
 const ROUTES = ['hoje', 'treino', 'dieta', 'progresso', 'perfil'];
 function route() {
@@ -538,6 +618,7 @@ function render(keepScroll = true) {
     document.body.dataset.route = r;
     document.querySelector('.tabbar').hidden = !get().profile.onboarded;
     if (keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
+    if (r === 'progresso') hydratePhotos();
   };
   if (!keepScroll && document.startViewTransition) { const vt = document.startViewTransition(paint); vt.ready.catch(() => {}); vt.finished.catch(() => {}); }
   else paint();
@@ -579,7 +660,7 @@ document.addEventListener('click', async (ev) => {
         const l = dayLog(ui.trainDate || iso(today()));
         const sets = l.workout.sets[name] || Array.from({ length: n }, () => ({ w: '', r: '', done: false }));
         const row = b.closest('.set');
-        const ex = WORKOUTS[l.workout.key].ex.find((e) => e.nome === name);
+        const ex = WORKOUTS[l.workout.key].ex[Number(b.dataset.i)];
         sets[j].w = row.querySelector('[data-k="w"]').value || row.querySelector('[data-k="w"]').placeholder.replace('kg', '');
         sets[j].r = row.querySelector('[data-k="r"]').value || String(ex.reps).split('-')[0].replace(/\D.*$/, '');
         sets[j].done = !sets[j].done;
@@ -593,7 +674,7 @@ document.addEventListener('click', async (ev) => {
       update(() => { const l = dayLog(ui.trainDate || iso(today())); l.workout.done = !l.workout.done; });
       if (dayLog(ui.trainDate || iso(today())).workout.done) toast('💪 Treino concluído!', 'Agora: jantar pós-treino no horário.');
       break;
-    case 'dietDay': ui.dietDay = b.dataset.v === '1'; break;
+    case 'dietDay': ui.dietDay = b.dataset.v; break;
     case 'swap': return openSwap(b.dataset);
     case 'doSwap':
       update((s) => {
@@ -603,6 +684,27 @@ document.addEventListener('click', async (ev) => {
       closeSheet();
       break;
     case 'closeSheet': return closeSheet();
+    case 'exSwap': return openExSwap(b.dataset.wk, Number(b.dataset.i));
+    case 'exCustom':
+    case 'doExSwap': {
+      const to = a === 'exCustom' ? $('#exCustom').value.trim() : b.dataset.to;
+      if (!to) return toast('Digite o nome do exercício');
+      const key = `${b.dataset.wk}:${b.dataset.i}`;
+      update((s) => {
+        s.profile.exSwaps = s.profile.exSwaps || {};
+        if (to === WORKOUTS[b.dataset.wk].ex[Number(b.dataset.i)].nome) delete s.profile.exSwaps[key]; else s.profile.exSwaps[key] = to;
+      });
+      closeSheet();
+      toast('Exercício trocado ✓', to);
+      break;
+    }
+    case 'weekendMenu': update((s) => { s.profile.weekendMenu = b.dataset.v === '1'; }); break;
+    case 'photo': return openPhoto(b.dataset.id);
+    case 'delPhoto':
+      if (!confirm('Apagar esta foto?')) return;
+      await deletePhoto(b.dataset.id); closeSheet(); toast('Foto apagada');
+      break;
+    case 'comparePose': ui.comparePose = b.dataset.pose; break;
     case 'notif': {
       if (get().settings.notifications && Notification?.permission === 'granted') { testNotification(); return; }
       const r = await requestPermission();
@@ -655,7 +757,7 @@ document.addEventListener('change', (ev) => {
   if (t.dataset.set !== undefined && t.dataset.name) {
     update(() => {
       const l = dayLog(ui.trainDate || iso(today()));
-      const ex = WORKOUTS[l.workout.key].ex.find((e) => e.nome === t.dataset.name);
+      const ex = WORKOUTS[l.workout.key].ex[Number(t.dataset.i)];
       const sets = l.workout.sets[t.dataset.name] || Array.from({ length: ex.series }, () => ({ w: '', r: '', done: false }));
       sets[Number(t.dataset.set)][t.dataset.k] = t.value;
       l.workout.sets[t.dataset.name] = sets;
@@ -668,6 +770,15 @@ document.addEventListener('change', (ev) => {
     const numeric = ['age', 'height', 'weight', 'bf', 'goalWeight', 'stepsGoal'];
     update((s) => { s.profile[k] = numeric.includes(k) ? (parseFloat(String(t.value).replace(',', '.')) || 0) : t.value; });
     return render();
+  }
+  if (t.dataset.photo && t.files[0]) {
+    const file = t.files[0];
+    toast('Salvando foto…');
+    addPhoto(file, iso(today()), t.dataset.photo)
+      .then(() => { toast('Foto salva ✓', 'Fica só neste aparelho.'); hydratePhotos(); })
+      .catch((e) => toast('Erro ao salvar foto', e.message));
+    t.value = '';
+    return;
   }
   if (t.id === 'importIn' && t.files[0]) {
     t.files[0].text().then((txt) => { try { importJSON(txt); toast('Backup restaurado ✓'); render(false); } catch (e) { toast('Erro ao importar', e.message); } });

@@ -24,6 +24,8 @@ export const DEFAULT_PROFILE = {
   sleepTime: '22:30',
   stepsGoal: 10000,
   mealTimes: { cafe: '07:00', lanche1: '10:00', almoco: '12:30', pre: '16:30', jantar: '20:00' },
+  weekendMenu: true,
+  exSwaps: {},
   onboarded: false,
 };
 
